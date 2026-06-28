@@ -1,3 +1,29 @@
+# Chess React
+
+A polished React + TypeScript chess app built with Vite, chess.js, react-chessboard, and a local Stockfish engine integration. The project provides a full single-page chess experience with local play, AI-assisted moves, engine analysis, legal-move highlighting, evaluation display, and PGN import/export.
+
+## Repository Summary
+
+This repository contains a front-end chess application focused on gameplay, analysis, and user interaction. The main app is located in the [chess-react](.) folder and includes:
+
+- A responsive chessboard UI with drag-and-drop and click-to-move controls
+- Full chess rules enforcement using chess.js
+- An AI mode powered by Stockfish running in a web worker
+- Move hints, engine analysis, and best-move highlighting
+- Evaluation score and a simple evaluation bar for the current position
+- PGN import/export and move history
+- Game controls for new game, reset, undo, flip board, and coordinate/move display toggles
+
+## Tech Stack
+
+- React 19
+- TypeScript
+- Vite
+- chess.js
+- react-chessboard
+- Stockfish WebAssembly / worker integration
+
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
@@ -27,8 +53,39 @@ Technical Requirements:
 * Provide clean, modern, and responsive CSS styling so the board and buttons look great on any screen size.
 * Ensure the code is split into logical components and is free of syntax errors. [1, 2, 3]
 
-
 ```
+
+## Project Structure
+
+- [src/components/ChessGame.tsx](src/components/ChessGame.tsx) — main game logic, engine integration, UI state, and controls
+- [src/components/ChessGame.css](src/components/ChessGame.css) — styling for the board, sidebar, engine panel, and overlays
+- [public/stockfish.js](public/stockfish.js) — public worker entrypoint for the engine
+- [public/stockfish-18-lite-single.js](public/stockfish-18-lite-single.js) and [public/stockfish-18-lite-single.wasm](public/stockfish-18-lite-single.wasm) — Stockfish assets used by the app
+
+## Getting Started
+
+From the [chess-react](.) folder, install dependencies and start the app:
+
+```bash
+npm install
+npm run dev
+```
+
+Then open the local Vite URL shown in the terminal.
+
+## Build
+
+To create a production build:
+
+```bash
+npm run build
+```
+
+## Notes
+
+- The engine runs locally in the browser through a web worker and does not require a backend.
+- The app is designed for local experimentation and educational chess play with built-in analysis assistance.
+
 
 
 ## React Compiler

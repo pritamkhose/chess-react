@@ -60,6 +60,49 @@ const getMovePairs = (history: string[]) => {
   return pairs
 }
 
+const getEvaluationMeta = (scoreText: string | null) => {
+  if (!scoreText) {
+    return {
+      label: 'No evaluation yet',
+      text: 'No evaluation yet',
+      percent: 50,
+      side: 'neutral' as const,
+    }
+  }
+
+  if (scoreText.startsWith('Mate')) {
+    const mateValue = Number(scoreText.replace('Mate ', ''))
+    const side = mateValue > 0 ? 'White' : 'Black'
+    return {
+      label: `${side} has a mating advantage`,
+      text: scoreText,
+      percent: mateValue > 0 ? 100 : 0,
+      side: side.toLowerCase() as 'white' | 'black',
+    }
+  }
+
+  const numericValue = Number.parseFloat(scoreText)
+  if (Number.isNaN(numericValue)) {
+    return {
+      label: 'No evaluation yet',
+      text: scoreText,
+      percent: 50,
+      side: 'neutral' as const,
+    }
+  }
+
+  const clamped = Math.max(-5, Math.min(5, numericValue))
+  const percent = ((clamped + 5) / 10) * 100
+  const side = numericValue > 0 ? 'white' : numericValue < 0 ? 'black' : 'neutral'
+
+  return {
+    label: numericValue > 0 ? `White advantage` : numericValue < 0 ? `Black advantage` : 'Equal position',
+    text: `${numericValue > 0 ? '+' : ''}${numericValue.toFixed(2)}`,
+    percent,
+    side,
+  }
+}
+
 function ChessGame() {
   const [game, setGame] = useState(() => new Chess())
   const [moveHistory, setMoveHistory] = useState<string[]>([])
@@ -155,7 +198,6 @@ function ChessGame() {
     engineThinkingRef.current = true
     setEngineThinking(true)
     setBestEngineMove(null)
-    setEngineScore(null)
     setEngineDepth(0)
     setAnalysisMode(analysis)
     setEngineLines(clearLines ? Array(multiPVRef.current).fill('Waiting for analysis...') : [])
@@ -203,21 +245,21 @@ function ChessGame() {
       }
 
       if (line.startsWith('info')) {
-        if (activeFenRef.current && activeFenRef.current !== gameRef.current.fen()) {
+        if (!activeFenRef.current || activeFenRef.current !== gameRef.current.fen()) {
           return
         }
 
-        const depthMatch = line.match(/ depth (\d+)/)
-        const scoreMatch = line.match(/ score (cp|mate) (-?\d+)/)
-        const multipvMatch = line.match(/ multipv (\d+)/)
-        const pvMatch = line.match(/ pv (.+)$/)
+        const depthMatch = line.match(/\bdepth\s+(\d+)/i)
+        const scoreMatch = line.match(/\bscore\s+(cp|mate)\s+(-?\d+)/i)
+        const multipvMatch = line.match(/\bmultipv\s+(\d+)/i)
+        const pvMatch = line.match(/\bpv\s+(.+)$/i)
 
         if (depthMatch) {
           setEngineDepth(Number(depthMatch[1]))
         }
 
         if (scoreMatch) {
-          const type = scoreMatch[1]
+          const type = scoreMatch[1].toLowerCase()
           const value = Number(scoreMatch[2])
           setEngineScore(type === 'mate' ? `Mate ${value}` : `${(value / 100).toFixed(2)}`)
         }
@@ -225,7 +267,7 @@ function ChessGame() {
         if (multipvMatch && pvMatch) {
           const lineNumber = Number(multipvMatch[1]) - 1
           const value = scoreMatch ? Number(scoreMatch[2]) : 0
-          const scoreText = scoreMatch ? (scoreMatch[1] === 'mate' ? `Mate ${value}` : `${(value / 100).toFixed(2)}`) : '-'
+          const scoreText = scoreMatch ? (scoreMatch[1].toLowerCase() === 'mate' ? `Mate ${value}` : `${(value / 100).toFixed(2)}`) : '-'
           const nextLine = `#${lineNumber + 1} ${scoreText} ${pvMatch[1]}`
 
           setEngineLines((previous) => {
@@ -237,7 +279,7 @@ function ChessGame() {
       }
 
       if (line.startsWith('bestmove')) {
-        if (activeFenRef.current && activeFenRef.current !== gameRef.current.fen()) {
+        if (!activeFenRef.current || activeFenRef.current !== gameRef.current.fen()) {
           return
         }
 
@@ -369,6 +411,7 @@ function ChessGame() {
 
   const status = useMemo(() => getGameStatus(game), [game])
   const movePairs = useMemo(() => getMovePairs(moveHistory), [moveHistory])
+  const evaluationMeta = useMemo(() => getEvaluationMeta(engineScore), [engineScore])
   const turnLabel = game.turn() === 'w' ? 'White' : 'Black'
   const gameEndState = useMemo<GameEndState>(() => {
     if (game.isCheckmate()) {
@@ -625,6 +668,22 @@ function ChessGame() {
         </section>
 
         <aside className="sidebar">
+
+          <div className="evaluation-card">
+            <div className="evaluation-header">
+              <span>Position eval</span>
+              <strong>{evaluationMeta.text}</strong>
+            </div>
+            <div className="evaluation-bar-track">
+              <div className={`evaluation-bar-fill ${evaluationMeta.side}`} style={{ width: `${evaluationMeta.percent}%` }} />
+            </div>
+            <div className="evaluation-footer">
+              <span>Black</span>
+              <span>{evaluationMeta.label}</span>
+              <span>White</span>
+            </div>
+          </div>
+
           <div className="engine-card">
             <div className="engine-card-row">
               <button type="button" className="toggle-button" onClick={() => setPlayMode((prev) => (prev === 'local' ? 'ai' : 'local'))}>
