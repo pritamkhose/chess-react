@@ -96,7 +96,7 @@
 }
 
 .board-panel > div {
-  transform: scale(2);
+  transform: scale(1);
   transform-origin: center;
 }
 

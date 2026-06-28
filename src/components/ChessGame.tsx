@@ -616,6 +616,7 @@ function ChessGame() {
         <div>
           <p className="eyebrow">React + chess.js + Stockfish</p>
           <p className="subtitle">Local Chess Match with AI - Play against Stockfish or switch to two-player mode with analysis and engine-assisted hints.</p>
+          <p className="subtitle"><a href="https://github.com/pritamkhose/chess-react" target="_blank" rel="noopener noreferrer">GitHub - pritamkhose/chess-react</a></p>
         </div>
 
         <div className="status-card">
