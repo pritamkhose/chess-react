@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Chess, type Square } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
 import './ChessGame.css'
@@ -96,6 +96,75 @@ function ChessGame() {
   const autoMoveRef = useRef(false)
   const searchPendingRef = useRef(false)
   const multiPVRef = useRef(multiPV)
+  const engineThinkingRef = useRef(false)
+  const activeFenRef = useRef<string | null>(null)
+  const gameRef = useRef(game)
+  const playModeRef = useRef(playMode)
+  const aiColorRef = useRef(aiColor)
+  const skillLevelRef = useRef(skillLevel)
+  const applyMoveRef = useRef<(from: Square, to: Square) => boolean>(() => false)
+
+  useEffect(() => {
+    gameRef.current = game
+  }, [game])
+
+  useEffect(() => {
+    playModeRef.current = playMode
+  }, [playMode])
+
+  useEffect(() => {
+    aiColorRef.current = aiColor
+  }, [aiColor])
+
+  useEffect(() => {
+    skillLevelRef.current = skillLevel
+  }, [skillLevel])
+
+  const resetEngineState = useCallback((message?: string | null) => {
+    engineRef.current?.postMessage('stop')
+    activeFenRef.current = null
+    autoMoveRef.current = false
+    engineThinkingRef.current = false
+    setEngineThinking(false)
+
+    if (message !== undefined) {
+      setHintMessage(message)
+    }
+  }, [])
+
+  const startEngineSearch = useCallback(({
+    depth,
+    analysis = false,
+    auto = false,
+    message,
+    clearLines = false,
+  }: {
+    depth: number
+    analysis?: boolean
+    auto?: boolean
+    message: string
+    clearLines?: boolean
+  }) => {
+    if (!engineReady || !engineRef.current) {
+      return
+    }
+
+    const fen = gameRef.current.fen()
+    activeFenRef.current = fen
+    autoMoveRef.current = auto
+    engineThinkingRef.current = true
+    setEngineThinking(true)
+    setBestEngineMove(null)
+    setEngineScore(null)
+    setEngineDepth(0)
+    setAnalysisMode(analysis)
+    setEngineLines(clearLines ? Array(multiPVRef.current).fill('Waiting for analysis...') : [])
+    setHintMessage(message)
+
+    engineRef.current.postMessage('stop')
+    engineRef.current.postMessage(`position fen ${fen}`)
+    engineRef.current.postMessage(`go depth ${depth}`)
+  }, [engineReady])
 
   useEffect(() => {
     const updateBoardWidth = () => {
@@ -111,7 +180,7 @@ function ChessGame() {
   }, [])
 
   useEffect(() => {
-    const worker = new Worker('/stockfish-worker.js')
+    const worker = new Worker('/stockfish.js?v=2')
 
     worker.onmessage = (event: MessageEvent<string>) => {
       const line = event.data?.toString?.() ?? ''
@@ -119,15 +188,25 @@ function ChessGame() {
         return
       }
 
+      if (line === 'engine-load-error') {
+        setEngineReady(false)
+        setHintMessage('Failed to initialize Stockfish engine in the web worker.')
+        return
+      }
+
       if (line === 'uciok') {
         setEngineReady(true)
         worker.postMessage('setoption name UCI_LimitStrength value true')
-        worker.postMessage(`setoption name Skill Level value ${skillLevel}`)
+        worker.postMessage(`setoption name Skill Level value ${skillLevelRef.current}`)
         worker.postMessage(`setoption name MultiPV value ${multiPVRef.current}`)
         return
       }
 
       if (line.startsWith('info')) {
+        if (activeFenRef.current && activeFenRef.current !== gameRef.current.fen()) {
+          return
+        }
+
         const depthMatch = line.match(/ depth (\d+)/)
         const scoreMatch = line.match(/ score (cp|mate) (-?\d+)/)
         const multipvMatch = line.match(/ multipv (\d+)/)
@@ -154,28 +233,32 @@ function ChessGame() {
             next[lineNumber] = nextLine
             return next.slice(0, multiPVRef.current)
           })
-        } else if (pvMatch) {
-          setBestEngineMove(pvMatch[1].split(' ')[0])
         }
       }
 
       if (line.startsWith('bestmove')) {
+        if (activeFenRef.current && activeFenRef.current !== gameRef.current.fen()) {
+          return
+        }
+
         const moveMatch = line.match(/bestmove ([a-h][1-8][a-h][1-8][nbrq]?)/)
         if (moveMatch) {
           const bestMove = moveMatch[1]
+          activeFenRef.current = null
           setBestEngineMove(bestMove)
+          engineThinkingRef.current = false
           setEngineThinking(false)
           searchPendingRef.current = false
 
           if (
             autoMoveRef.current &&
-            playMode === 'ai' &&
-            !game.isGameOver() &&
-            game.turn() === (aiColor === 'white' ? 'w' : 'b')
+            playModeRef.current === 'ai' &&
+            !gameRef.current.isGameOver() &&
+            gameRef.current.turn() === (aiColorRef.current === 'white' ? 'w' : 'b')
           ) {
             const from = bestMove.slice(0, 2) as Square
             const to = bestMove.slice(2) as Square
-            applyMove(from, to)
+            applyMoveRef.current(from, to)
             autoMoveRef.current = false
           }
         }
@@ -201,20 +284,19 @@ function ChessGame() {
   }, [])
 
   useEffect(() => {
-    if (!engineReady || playMode !== 'ai' || engineThinking || game.isGameOver()) {
+    if (!engineReady || playModeRef.current !== 'ai' || engineThinkingRef.current || game.isGameOver()) {
       return
     }
 
     const activeColor = game.turn() === 'w' ? 'white' : 'black'
-    if (activeColor === aiColor) {
-      autoMoveRef.current = true
-      setHintMessage(`${aiColor} engine is thinking...`)
-      setEngineThinking(true)
-      setBestEngineMove(null)
-      engineRef.current?.postMessage(`position fen ${game.fen()}`)
-      engineRef.current?.postMessage(`go depth ${searchDepth}`)
+    if (activeColor === aiColorRef.current) {
+      startEngineSearch({
+        depth: searchDepth,
+        auto: true,
+        message: `${aiColorRef.current} engine is thinking...`,
+      })
     }
-  }, [game, engineReady, playMode, aiColor, searchDepth, engineThinking])
+  }, [game, engineReady, playMode, aiColor, searchDepth, startEngineSearch])
 
   useEffect(() => {
     if (!engineReady) {
@@ -234,36 +316,23 @@ function ChessGame() {
   }, [engineReady, multiPV])
 
   const sendHintRequest = () => {
-    if (!engineReady || !engineRef.current) {
-      return
-    }
-
-    autoMoveRef.current = false
-    setAnalysisMode(false)
-    setEngineThinking(true)
-    setHintMessage('Finding best move...')
-    engineRef.current.postMessage(`position fen ${game.fen()}`)
-    engineRef.current.postMessage(`go depth ${searchDepth}`)
+    startEngineSearch({
+      depth: searchDepth,
+      message: 'Finding best move...',
+    })
   }
 
   const stopEngine = () => {
-    engineRef.current?.postMessage('stop')
-    setEngineThinking(false)
-    setHintMessage('Engine stopped.')
+    resetEngineState('Engine stopped.')
   }
 
   const sendAnalysisRequest = () => {
-    if (!engineReady || !engineRef.current) {
-      return
-    }
-
-    autoMoveRef.current = false
-    setAnalysisMode(true)
-    setEngineThinking(true)
-    setEngineLines(Array(multiPV).fill('Waiting for analysis...'))
-    setHintMessage('Running full analysis...')
-    engineRef.current.postMessage(`position fen ${game.fen()}`)
-    engineRef.current.postMessage(`go depth ${analysisDepth}`)
+    startEngineSearch({
+      depth: analysisDepth,
+      analysis: true,
+      message: 'Running full analysis...',
+      clearLines: true,
+    })
   }
 
   const exportPgn = async () => {
@@ -341,11 +410,13 @@ function ChessGame() {
   }, [game])
 
   const legalMoveStyles = useMemo(() => {
-    if (!selectedSquare || !showLegalMoves) {
+    if (!showLegalMoves) {
       return {}
     }
 
-    const moves = game.moves({ square: selectedSquare, verbose: true })
+    const moves = selectedSquare
+      ? game.moves({ square: selectedSquare, verbose: true })
+      : game.moves({ verbose: true })
 
     return Object.fromEntries(
       moves.map((move) => [
@@ -378,7 +449,7 @@ function ChessGame() {
     }
   }, [lastMoveStyles, legalMoveStyles, bestEngineMoveStyles, selectedSquare])
 
-  const applyMove = (from: Square, to: Square) => {
+  const applyMove = useCallback((from: Square, to: Square) => {
     const nextGame = new Chess(game.fen())
     const move = nextGame.move({ from, to, promotion: 'q' })
 
@@ -386,11 +457,20 @@ function ChessGame() {
       return false
     }
 
+    resetEngineState()
+    setBestEngineMove(null)
+    setEngineScore(null)
+    setEngineDepth(0)
+    setEngineLines([])
     setGame(nextGame)
     setMoveHistory((previous) => [...previous, move.san])
     setSelectedSquare(null)
     return true
-  }
+  }, [game, resetEngineState])
+
+  useEffect(() => {
+    applyMoveRef.current = applyMove
+  }, [applyMove])
 
   const handlePieceDrop = ({
     sourceSquare,
@@ -435,7 +515,7 @@ function ChessGame() {
   }
 
   const startNewGame = () => {
-    engineRef.current?.postMessage('stop')
+    resetEngineState()
     setGame(new Chess())
     setMoveHistory([])
     setSelectedSquare(null)
@@ -448,7 +528,7 @@ function ChessGame() {
   }
 
   const resetCurrentGame = () => {
-    engineRef.current?.postMessage('stop')
+    resetEngineState()
     setGame(new Chess())
     setSelectedSquare(null)
     setEngineLines([])
@@ -457,7 +537,7 @@ function ChessGame() {
   }
 
   const undoLastMove = () => {
-    engineRef.current?.postMessage('stop')
+    resetEngineState()
     const nextGame = new Chess(game.fen())
     const undoneMove = nextGame.undo()
 
@@ -527,7 +607,7 @@ function ChessGame() {
               position: game.fen(),
               onPieceDrop: handlePieceDrop,
               onSquareClick: handleSquareClick,
-              animationDurationInMs: 220,
+              animationDurationInMs: 800,
               allowDragging: playMode === 'local' || game.turn() !== (aiColor === 'white' ? 'w' : 'b'),
               boardOrientation,
               showNotation: showCoordinates,
