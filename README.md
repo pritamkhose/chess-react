@@ -7,6 +7,30 @@ Currently, two official plugins are available:
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
 - [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
+
+## Promot
+
+```
+Act as an expert React developer. I need a fully functional, 2-player local chess game built with React, chess.js for game rules/validation, and react-chessboard for the UI. [1]
+Include the following features and functionalities:
+1. Drag and Drop: Users should be able to drag and drop pieces intuitively across a responsive board. [1]
+2. Move Validation: It must strictly enforce chess rules using chess.js (e.g., checking for checkmate, stalemate, and valid moves). [1, 2]
+3. Control Buttons:
+    * New Game: Clears the board and starts a fresh match.
+    * Reset: Restarts the current game without wiping the move history.
+    * Undo Last Move: Reverts the last played move using the chess engine's built-in undo method. [1, 2, 3, 4, 5]
+4. Game Status: Display whose turn it is (White/Black) and if there is a check, checkmate, or draw. [1]
+Technical Requirements:
+* Use React hooks like useState to maintain board state.
+* Import Chess from chess.js to manage the game logic.
+* Import Chessboard from react-chessboard to render the interactive UI.
+* Provide clean, modern, and responsive CSS styling so the board and buttons look great on any screen size.
+* Ensure the code is split into logical components and is free of syntax errors. [1, 2, 3]
+
+
+```
+
+
 ## React Compiler
 
 The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
