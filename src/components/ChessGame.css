@@ -75,6 +75,7 @@
 }
 
 .game-shell {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.95fr);
   gap: 1.5rem;
@@ -111,7 +112,8 @@
   gap: 0.75rem;
 }
 
-.button-panel button {
+.button-panel button,
+.utility-panel button {
   flex: 1 1 140px;
   border: 0;
   border-radius: 999px;
@@ -123,7 +125,8 @@
   transition: transform 180ms ease, background 180ms ease;
 }
 
-.button-panel button:hover {
+.button-panel button:hover,
+.utility-panel button:hover {
   transform: translateY(-1px);
   background: rgba(51, 65, 85, 1);
 }
@@ -131,6 +134,12 @@
 .button-panel .primary {
   color: white;
   background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+}
+
+.utility-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .panel-card {
@@ -162,6 +171,81 @@
   border-radius: 10px;
   background: rgba(30, 41, 59, 0.7);
   color: #f8fafc;
+}
+
+.celebration-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.celebration-card {
+  position: relative;
+  z-index: 2;
+  padding: 1.25rem 1.5rem;
+  border-radius: 24px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(248, 250, 252, 0.2);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+  text-align: center;
+  min-width: min(320px, 80vw);
+}
+
+.celebration-badge {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  color: #fbbf24;
+}
+
+.celebration-card h2 {
+  margin: 0 0 0.45rem;
+  font-size: clamp(1.25rem, 2vw, 1.6rem);
+  color: #fff;
+}
+
+.celebration-card p {
+  margin: 0;
+  color: #e2e8f0;
+}
+
+.confetti-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 24px;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -10%;
+  left: var(--x);
+  width: 10px;
+  height: 18px;
+  background: linear-gradient(135deg, #f43f5e, #f59e0b, #22c55e, #3b82f6);
+  opacity: 0.95;
+  animation: confetti-fall 1.8s linear infinite;
+  animation-delay: var(--delay);
+  transform: rotate(24deg);
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, 100vh, 0) rotate(720deg);
+    opacity: 0;
+  }
 }
 
 .move-number {

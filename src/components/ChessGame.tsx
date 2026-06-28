@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Chess } from 'chess.js'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { Chess, type Square } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
 import './ChessGame.css'
 
@@ -8,6 +8,12 @@ type StatusTone = 'neutral' | 'warning' | 'danger'
 type GameStatus = {
   label: string
   tone: StatusTone
+}
+
+type GameEndState = {
+  type: 'checkmate' | 'draw' | null
+  winner: 'White' | 'Black' | null
+  message: string
 }
 
 const getGameStatus = (game: Chess): GameStatus => {
@@ -65,6 +71,12 @@ function ChessGame() {
     return Math.min(620, Math.max(320, window.innerWidth > 768 ? 560 : window.innerWidth - 32))
   })
 
+  const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white')
+  const [showCoordinates, setShowCoordinates] = useState(true)
+  const [showLegalMoves, setShowLegalMoves] = useState(true)
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null)
+  const [copiedFen, setCopiedFen] = useState(false)
+
   useEffect(() => {
     const updateBoardWidth = () => {
       setBoardWidth(
@@ -83,6 +95,81 @@ function ChessGame() {
   const status = useMemo(() => getGameStatus(game), [game])
   const movePairs = useMemo(() => getMovePairs(moveHistory), [moveHistory])
   const turnLabel = game.turn() === 'w' ? 'White' : 'Black'
+  const gameEndState = useMemo<GameEndState>(() => {
+    if (game.isCheckmate()) {
+      const winner = game.turn() === 'w' ? 'Black' : 'White'
+      return {
+        type: 'checkmate',
+        winner,
+        message: `${winner} wins by checkmate!`,
+      }
+    }
+
+    if (game.isDraw()) {
+      return {
+        type: 'draw',
+        winner: null,
+        message: 'It is a draw!',
+      }
+    }
+
+    return {
+      type: null,
+      winner: null,
+      message: '',
+    }
+  }, [game])
+
+  const lastMoveStyles = useMemo(() => {
+    const history = game.history({ verbose: true })
+    const lastMove = history[history.length - 1]
+
+    if (!lastMove) {
+      return {}
+    }
+
+    return {
+      [lastMove.from]: { backgroundColor: 'rgba(250, 204, 21, 0.42)' },
+      [lastMove.to]: { backgroundColor: 'rgba(250, 204, 21, 0.62)' },
+    } as Record<string, CSSProperties>
+  }, [game])
+
+  const legalMoveStyles = useMemo(() => {
+    if (!selectedSquare || !showLegalMoves) {
+      return {}
+    }
+
+    const moves = game.moves({ square: selectedSquare, verbose: true })
+
+    return Object.fromEntries(
+      moves.map((move) => [
+        move.to,
+        { backgroundColor: 'rgba(34, 197, 94, 0.34)', borderRadius: '50%' },
+      ]),
+    ) as Record<string, CSSProperties>
+  }, [game, selectedSquare, showLegalMoves])
+
+  const squareStyles = useMemo(() => {
+    return {
+      ...lastMoveStyles,
+      ...legalMoveStyles,
+      ...(selectedSquare ? { [selectedSquare]: { backgroundColor: 'rgba(96, 165, 250, 0.35)' } } : {}),
+    }
+  }, [lastMoveStyles, legalMoveStyles, selectedSquare])
+
+  const applyMove = (from: Square, to: Square) => {
+    const nextGame = new Chess(game.fen())
+    const move = nextGame.move({ from, to, promotion: 'q' })
+
+    if (!move) {
+      return false
+    }
+
+    setGame(nextGame)
+    setMoveHistory((previous) => [...previous, move.san])
+    setSelectedSquare(null)
+    return true
+  }
 
   const handlePieceDrop = ({
     sourceSquare,
@@ -95,25 +182,42 @@ function ChessGame() {
       return false
     }
 
-    const nextGame = new Chess(game.fen())
-    const move = nextGame.move({ from: sourceSquare, to: targetSquare, promotion: 'q' })
+    return applyMove(sourceSquare as Square, targetSquare as Square)
+  }
 
-    if (!move) {
-      return false
+  const handleSquareClick = ({ square }: { square: string }) => {
+    const targetSquare = square as Square
+    const piece = game.get(targetSquare)
+
+    if (selectedSquare && selectedSquare !== targetSquare) {
+      const moved = applyMove(selectedSquare, targetSquare)
+      if (!moved) {
+        if (piece && piece.color === game.turn()) {
+          setSelectedSquare(targetSquare)
+        } else {
+          setSelectedSquare(null)
+        }
+      }
+      return
     }
 
-    setGame(nextGame)
-    setMoveHistory((previous) => [...previous, move.san])
-    return true
+    if (piece && piece.color === game.turn()) {
+      setSelectedSquare(targetSquare)
+      return
+    }
+
+    setSelectedSquare(null)
   }
 
   const startNewGame = () => {
     setGame(new Chess())
     setMoveHistory([])
+    setSelectedSquare(null)
   }
 
   const resetCurrentGame = () => {
     setGame(new Chess())
+    setSelectedSquare(null)
   }
 
   const undoLastMove = () => {
@@ -126,6 +230,21 @@ function ChessGame() {
 
     setGame(nextGame)
     setMoveHistory((previous) => previous.slice(0, -1))
+    setSelectedSquare(null)
+  }
+
+  const flipBoard = () => {
+    setBoardOrientation((previous) => (previous === 'white' ? 'black' : 'white'))
+  }
+
+  const copyFen = async () => {
+    try {
+      await navigator.clipboard.writeText(game.fen())
+      setCopiedFen(true)
+      window.setTimeout(() => setCopiedFen(false), 1400)
+    } catch {
+      setCopiedFen(false)
+    }
   }
 
   return (
@@ -138,13 +257,36 @@ function ChessGame() {
       </header>
 
       <div className="game-shell">
+        {gameEndState.type && (
+          <div className="celebration-overlay" role="status" aria-live="polite">
+            <div className="confetti-layer" aria-hidden="true">
+              {Array.from({ length: 24 }).map((_, index) => (
+                <span
+                  key={index}
+                  className="confetti-piece"
+                  style={{ ['--delay' as string]: `${index * 0.08}s`, ['--x' as string]: `${(index % 6) * 18 - 54}%` }}
+                />
+              ))}
+            </div>
+            <div className="celebration-card">
+              <p className="celebration-badge">{gameEndState.type === 'checkmate' ? '🏆 Game Over' : '🤝 Draw'}</p>
+              <h2>{gameEndState.message}</h2>
+              <p>{gameEndState.winner ? `${gameEndState.winner} takes the win.` : 'No winner this round.'}</p>
+            </div>
+          </div>
+        )}
+
         <section className="board-panel" aria-label="Chessboard">
           <Chessboard
             options={{
               position: game.fen(),
               onPieceDrop: handlePieceDrop,
+              onSquareClick: handleSquareClick,
               animationDurationInMs: 220,
               allowDragging: true,
+              boardOrientation,
+              showNotation: showCoordinates,
+              squareStyles,
               boardStyle: {
                 width: boardWidth,
                 height: boardWidth,
@@ -175,6 +317,21 @@ function ChessGame() {
             </button>
             <button type="button" onClick={undoLastMove}>
               Undo Move
+            </button>
+          </div>
+
+          <div className="utility-panel">
+            <button type="button" onClick={flipBoard}>
+              {boardOrientation === 'white' ? 'Flip Board' : 'Unflip Board'}
+            </button>
+            <button type="button" onClick={() => setShowCoordinates((previous) => !previous)}>
+              {showCoordinates ? 'Hide Coordinates' : 'Show Coordinates'}
+            </button>
+            <button type="button" onClick={() => setShowLegalMoves((previous) => !previous)}>
+              {showLegalMoves ? 'Hide Moves' : 'Show Moves'}
+            </button>
+            <button type="button" onClick={copyFen}>
+              {copiedFen ? 'FEN Copied' : 'Copy FEN'}
             </button>
           </div>
 
