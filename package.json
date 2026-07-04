@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build-github-pages": "VITE_APP_BASE_URL=${VITE_APP_BASE_URL:-chess-react} tsc -b && VITE_APP_BASE_URL=${VITE_APP_BASE_URL:-chess-react} vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

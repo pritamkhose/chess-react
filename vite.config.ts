@@ -8,12 +8,15 @@ export default (mode: any) => {
   // Load app-level env vars to node-level env vars.
   process.env = { ...process.env, ...loadEnv(mode, process.cwd()) };
   const { VITE_APP_BASE_URL } = process.env;
+  const normalizedBase = VITE_APP_BASE_URL
+    ? `/${VITE_APP_BASE_URL.replace(/^\/+|\/+$/g, '')}/`
+    : '/';
 
   return defineConfig({
     plugins: [
       react(),
       babel({ presets: [reactCompilerPreset()] })
     ],
-    base: VITE_APP_BASE_URL ? VITE_APP_BASE_URL : '/'
+    base: normalizedBase
   })
 }
